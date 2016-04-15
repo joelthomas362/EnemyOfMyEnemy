@@ -12,6 +12,8 @@ TagManager:
   - Damage
   - Bullet
   - Shield
+  - EnemyMgr
+  - PosterCanvas
   - EnemyManager
   layers:
   - Default
@@ -26,8 +28,8 @@ TagManager:
   - Shootable
   - LightMask
   - Invisible
-  - 
-  - 
+  - PlayerBullet
+  - PlayerCollider
   - 
   - 
   - 

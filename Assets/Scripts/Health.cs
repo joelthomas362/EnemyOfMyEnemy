@@ -1,69 +1,72 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 
 public class Health : MonoBehaviour {
 
 
-    public int health;
+    // Health Stats
+    [SerializeField] protected int health;
     public float damageCoolDown;
+    protected bool _invincible;
+
+    // Death
     public GameObject deathParticles;
-    public Color hurtColor;
-    [HideInInspector] public Transform playerRespawnPoint;
 
-    private int _initialHealth;
-    private bool _invincible;
+    // Audio
+    public AudioClip[] damageSoundEffects;
+    protected AudioSource _damageAudio;
+    // 0 damage sound
+    // 1 death  sound
 
-
+ 
     void Awake()
     {
-        _initialHealth = health;
         _invincible = false;
+
+        _damageAudio = GetComponent<AudioSource>();
     }
 
     // -- Remove health from object -- kill if necessary -- //
-    public void TakeDamage(int damageAmount)
+    public virtual void TakeDamage(int damageAmount)
     {
         if (_invincible)
             return;
+
+        _damageAudio.clip = damageSoundEffects[0];
+        _damageAudio.Play();
 
         health -= damageAmount;
 
         StartCoroutine(DamageCooldown());
 
-        gameObject.GetComponent<Renderer>().material.color = hurtColor;
-
-        if (health > 0)
-            return;
-
-        if (gameObject.CompareTag("Player"))
-            RespawnPlayer();
-        else
+        // -- Death -- //
+        if (health <= 0 && !gameObject.CompareTag("Player"))
             Die();
     }
 
     IEnumerator DamageCooldown()
     {
         _invincible = true;
+        //_objectColor.material.color = hurtColor;
 
         yield return new WaitForSeconds(damageCoolDown);
 
         _invincible = false;
+        //_objectColor.material.color = _initialColor;
     }
 
+    // Destroy object
     void Die()
     {
+        _damageAudio.clip = damageSoundEffects[1];
+        _damageAudio.Play();
+
         CameraController.Instance.ScreenShake(.1f);
 
         Instantiate(deathParticles, transform.position, Quaternion.Euler(90f, 0f, 0f));
         Destroy(gameObject);
     }
 
-    // -- Send player to alotted respawn point -- //
-    void RespawnPlayer()
-    {
-        if(playerRespawnPoint)
-            transform.position = playerRespawnPoint.position;
-
-        health = _initialHealth;
-    }
+    public virtual void PlayerCheckPoint(Transform newSpawnPoint) { }
 }

@@ -1,63 +1,73 @@
 ﻿using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections;
 
 public class PlayerController : MonoBehaviour {
 
 
-
+    // Shooting
     public Rigidbody bulletPrefab;
     public Transform firePoint;
-    public Color damageColor;
-    public AudioSource damagedSound;
-    public AudioSource dashSound;
-    
 
-    public MeshRenderer playerFront;
+    // Audio
+    public AudioClip[] playerSoundEffects;
+    private AudioSource _playerSounds;
+    // 0 Dash 
+    // 1 Shoot
+    // 2 Taunt
 
-    #region private
+    // Components
     private Rigidbody _playerControls;
-    private Moe _moeScript;
-    private Renderer _render;
+    private MoeAI _moeScript;
 
-  
+    // Animations
+    private Animator _playerAnimator;
+    private int _dashAnim;
+    private int _shootAnim;
 
+    // Attributes
     private float moveSpeed;
-	private float moveSpeedModifier;
-    public float diveSpeed;
-   
+    private float moveSpeedModifier;
+    private float horz;
+    private float vert;
+
+    // Abilities
+    [HideInInspector] public bool tauntDisabled;
+    private bool canTaunt;
     private bool _canRoll;
     private bool _canShoot;
+    private bool _rotationDisabled;
 
-    private bool _invincible;
-    #endregion
+    public float offset;
 
     void Awake()
     {
-        _moeScript = GameObject.FindGameObjectWithTag("Moe").GetComponent<Moe>();
+        _moeScript = GameObject.FindGameObjectWithTag("Moe").GetComponent<MoeAI>();
         _playerControls = GetComponent<Rigidbody>();
-        _render = GetComponent<Renderer>();
+        _playerSounds = GetComponent<AudioSource>();
 
-        moveSpeed = 6f;
-		moveSpeedModifier = 1f;
-        diveSpeed = 1300f;
+        _playerAnimator = GetComponent<Animator>();
+        _dashAnim = Animator.StringToHash("Dash");
+        _shootAnim = Animator.StringToHash("Shoot");
+
+        // Player metrics
+        moveSpeed = 5f;
+        moveSpeedModifier = 1f;
 
         _canRoll = true;
         _canShoot = true;
-
-        _invincible = false;
+        canTaunt = true;
+        tauntDisabled = false;
     }
-	
-	void FixedUpdate ()
-    {
-        // -- left thumbstick -- //
-        float horz = Input.GetAxisRaw("Horizontal");
-        float vert = Input.GetAxisRaw("Vertical");
 
-        // -- right thumbstick -- //
+    void FixedUpdate()
+    {
+        // -- left thumbstick controls -- //
+        horz = Input.GetAxisRaw("LeftHorz");
+        vert = Input.GetAxisRaw("LeftVert");
+        // -- right thumbstick controls -- //
         float rightHorz = Input.GetAxis("RightHorz");
         float rightVert = Input.GetAxis("RightVert");
-
-        
 
 
         // move player with left stick
@@ -71,31 +81,43 @@ public class PlayerController : MonoBehaviour {
             RotatePlayer(rightHorz, rightVert);
 
         // dive roll
-        if (Input.GetAxis("Fire2") > 0)
+        if (Input.GetAxis("Dash") > 0)
             StartCoroutine(DiveRoll(horz, vert));
     }
 
     void Update()
     {
+        //Debug.DrawRay(transform.position + Vector3.up * 3, transform.forward * 6, Color.red);
+
         // player shooting
-        if (Input.GetAxis("Fire1") > 0f)
+        if (Input.GetAxis("Shoot") > 0f)
             StartCoroutine(ShootPea());
 
 
-        if (Input.GetButtonDown("Fire3"))
-            Taunt();
+        if (Input.GetButtonDown("Taunt") && canTaunt && !tauntDisabled)
+            StartCoroutine(Taunt());
+
+        //Restart Level
+        if (Input.GetKeyDown(KeyCode.Q))
+            SceneManager.LoadScene(0);
+
+        //Exit Game
+        if (Input.GetKeyDown(KeyCode.Escape))
+            Application.Quit();
     }
 
     void MovePlayer(float hAxis, float vAxis)
     {
         Vector3 movement = new Vector3(hAxis, 0f, vAxis);
-		movement = movement.normalized * (moveSpeed * moveSpeedModifier) * Time.deltaTime;
 
-        _playerControls.MovePosition(transform.position + movement);      
+        _playerControls.MovePosition(transform.position + movement * moveSpeed * Time.deltaTime);
     }
 
     void RotatePlayer(float hAxis, float vAxis)
     {
+        if (_rotationDisabled)
+            return;
+
         float angle = Mathf.Atan2(hAxis, vAxis) * Mathf.Rad2Deg;
 
         if (angle == 0f)
@@ -104,9 +126,18 @@ public class PlayerController : MonoBehaviour {
         transform.rotation = Quaternion.Euler(0f, angle, 0f);
     }
 
-    void Taunt()
+    IEnumerator Taunt()
     {
-        StartCoroutine(_moeScript.BullCharge());
+        canTaunt = false;
+
+        _playerSounds.clip = playerSoundEffects[2];
+        _playerSounds.Play();
+
+        _moeScript.ChangeState(MoeAI.aiState.charging);
+
+        yield return new WaitForSeconds(1f);
+
+        canTaunt = true;
     }
 
     IEnumerator DiveRoll(float rHAxis, float rVAxis)
@@ -115,42 +146,46 @@ public class PlayerController : MonoBehaviour {
             yield break;
 
         _canRoll = false;
+        StartCoroutine(DisableRotation());
 
+        _playerAnimator.SetTrigger(_dashAnim);
         
-        Vector3 diveRoll = new Vector3(rHAxis, 0f, rVAxis);
-        diveRoll = diveRoll.normalized * diveSpeed * Time.deltaTime;
-        _playerControls.AddForce(diveRoll, ForceMode.Impulse);
-
-        dashSound.pitch = Random.Range(.8f, 1.1f);
-        dashSound.Play();
-
-        _render.material.color = Color.magenta;
-
         yield return new WaitForSeconds(2f);
 
-        _render.material.color = Color.red;
         _canRoll = true;
     }
 
-    IEnumerator TakeDamage()
+    IEnumerator DisableRotation()
     {
-        if (_invincible)
-            yield break;
+        _rotationDisabled = true;
+        yield return new WaitForSeconds(.8f);
+        _rotationDisabled = false;
+    }
+
+    IEnumerator DashAnimEvent()
+    {
+        _playerSounds.clip = playerSoundEffects[0];
+        _playerSounds.Play();
+
+        Vector3 dashTarget;
+        RaycastHit rayInfo;
+
+        if (Physics.Raycast(transform.position + new Vector3(0f, 3f, 0f), transform.forward, out rayInfo, 6))
+            dashTarget = rayInfo.point;
+        else
+            dashTarget = transform.position + transform.forward * 6.5f;
 
 
-        _invincible = true;
+        float dashUnstick = 1.0f;
+        while (Vector3.Distance(transform.position, dashTarget) > 2f)
+        {
+            if (dashUnstick <= 0f)
+                break;
 
-        _render.material.color = damageColor;
-
-        CameraController.Instance.ScreenShake(.1f);
-
-        damagedSound.pitch = Random.Range(.8f, 1.6f);
-        damagedSound.Play();
-
-        yield return new WaitForSeconds(2f);
-
-        _invincible = false;
-        _render.material.color = Color.red;
+            transform.position = Vector3.Lerp(transform.position, dashTarget,  Time.deltaTime * 3f);
+            dashUnstick -= Time.deltaTime;
+            yield return null;
+        }
     }
 
     IEnumerator ShootPea()
@@ -158,26 +193,21 @@ public class PlayerController : MonoBehaviour {
         if (!_canShoot)
             yield break;
 
-        playerFront.enabled = false;
         _canShoot = false;
-        Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
+
+        _playerAnimator.SetTrigger(_shootAnim);
 
         yield return new WaitForSeconds(1f);
 
-        playerFront.enabled = true;
         _canShoot = true;
     }
 
-    void OnCollisionEnter(Collision col)
+    void ShootAnimEvent()
     {
-        if (col.gameObject.CompareTag("Enemy") || col.gameObject.CompareTag("Damage"))
-            StartCoroutine(TakeDamage());
-    }
+        Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
 
-    void OnTriggerEnter(Collider col)
-    {
-        if (col.CompareTag("Damage"))
-            StartCoroutine(TakeDamage());
+        _playerSounds.clip = playerSoundEffects[1];
+        _playerSounds.Play();
     }
 
 	public float MoveSpeedModifier {

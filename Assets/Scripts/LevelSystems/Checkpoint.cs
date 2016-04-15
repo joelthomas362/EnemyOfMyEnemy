@@ -3,11 +3,10 @@ using System.Collections;
 
 public class Checkpoint : MonoBehaviour {
 
-    [Header("Player Spawn Point")] public Transform spawnPoint;
 
-    [Header("Torch Stuff")]
+    public Transform spawnPoint;
     public GameObject torchParticles;
-    public Transform firePoint;
+    public AudioSource checkpointSound;
 
     private bool _activatedCheckpoint;
 
@@ -15,18 +14,19 @@ public class Checkpoint : MonoBehaviour {
     {
         _activatedCheckpoint = false;
         torchParticles.SetActive(false);
-	}
+    }
 	
     
     void OnTriggerEnter(Collider other)
     {
-        if (_activatedCheckpoint == true)
-            return;
-
-        if (other.CompareTag("Player"))
+        if (other.CompareTag("Player") && !_activatedCheckpoint)
         {
             _activatedCheckpoint = true;
-            other.GetComponent<Health>().playerRespawnPoint = spawnPoint;
+            checkpointSound.Play();
+
+            // give player back their health - change the spawn point
+            other.GetComponent<Health>().PlayerCheckPoint(spawnPoint);
+
             torchParticles.SetActive(true);
         }
     }

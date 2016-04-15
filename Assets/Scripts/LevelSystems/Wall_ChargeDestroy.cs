@@ -5,15 +5,20 @@ public class Wall_ChargeDestroy : MonoBehaviour {
 
 
 
-    public GameObject FinalParticles;
+    public GameObject destroyParticles;
+    public bool canBeDestroyed;
 
-    void OnCollisionEnter(Collision col)
+    void Awake()
     {
-        if (!col.gameObject.CompareTag("Moe"))
-            return;
+        canBeDestroyed = true;
+    }
 
-        col.gameObject.GetComponent<Moe>().StartCoroutine("FollowCheck");
-        Instantiate(FinalParticles, transform.position, FinalParticles.transform.rotation);
-        Destroy(gameObject);
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.CompareTag("Damage") && canBeDestroyed)
+        {
+            Instantiate(destroyParticles, transform.position, destroyParticles.transform.rotation);
+            Destroy(gameObject);
+        }
     }
 }

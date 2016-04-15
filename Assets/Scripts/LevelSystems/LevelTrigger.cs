@@ -3,13 +3,17 @@ using System.Collections;
 
 public class LevelTrigger : MonoBehaviour {
 
-    [Header("DRAG SPAWNERS HERE")]
+    [Header("EnemySpawn")]
     public GameObject[] enemySpawners;
 
-    [Header("DRAG BARRIER OBJECTS HERE")]
+    [Header("Spike Walls")]
     public Transform fightBarriers;
-
     public float raiseSpeed;
+    public bool needsToRaiseBarriers;
+    public bool onlyNeedLarry;
+    public bool onlyNeedMoe;
+
+    public ArchTrigger archTrigger;
 
     [SerializeField] private int _totalEnemyCount;
     private Transform _enemyManager;
@@ -18,18 +22,22 @@ public class LevelTrigger : MonoBehaviour {
     private bool _playerCrossed;
     private bool _moeCrossed;
 
+    private bool _roomCleared;
+
    
-    
     void Awake()
     {
         triggerActivated = false;
+        _roomCleared = false;
 
+        // turn off the spawners attached and get the enemy amount to kill
         foreach(GameObject spawner in enemySpawners)
         {
             spawner.SetActive(false);
             _totalEnemyCount += spawner.GetComponent<EnemySpawner>().enemiesToSpawn;
         }
 
+        // enemy manager tracks the amount of enemies to kill
         _enemyManager = transform.FindChild("EnemyManager");
         _enemyManager.gameObject.SetActive(false);
 
@@ -37,6 +45,7 @@ public class LevelTrigger : MonoBehaviour {
         _meshRender.enabled = false;
     }
 
+    
     void OnTriggerEnter(Collider other)
     {
         if(triggerActivated)
@@ -48,49 +57,77 @@ public class LevelTrigger : MonoBehaviour {
             _moeCrossed = true;
 
 
-
-        if (_playerCrossed && _moeCrossed)
+        if (_playerCrossed && _moeCrossed || _playerCrossed && onlyNeedLarry || _moeCrossed && onlyNeedMoe)
         {
             triggerActivated = true;
-
-            foreach (GameObject spawner in enemySpawners)
-                spawner.SetActive(true);
-
-            StartCoroutine(RaiseBarriers());
             _enemyManager.gameObject.SetActive(true);
+
+            Invoke("SpawnEnemies", .5f);
+
+            if (needsToRaiseBarriers)
+                StartCoroutine(RaiseBarriers()); 
         }
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("Player"))
+            _playerCrossed = false;
+        else if (other.CompareTag("Moe"))
+            _moeCrossed = false;
     }
 
     public void MinusOneEnemy()
     {
         _totalEnemyCount--;
 
-        if (_totalEnemyCount <= 0)
+        if (_totalEnemyCount <= 0 && !_roomCleared)
+        {
             StartCoroutine(LowerBarriers());
 
-        print(_totalEnemyCount);
+            if(archTrigger)
+                StartCoroutine(archTrigger.LowerBarriers());
+        }
+           
+
+        Debug.LogWarning(_totalEnemyCount);
     }
 
     IEnumerator RaiseBarriers()
     {
-        print("raising barriers");
+        if (!fightBarriers)
+            yield break;
+
+        Vector3 targetHeight = new Vector3(fightBarriers.transform.position.x, fightBarriers.transform.position.y + 2.7f, fightBarriers.transform.position.z);
         yield return new WaitForSeconds(.5f);
 
-        for(float i = 0; i < 4; i += .2f)
+        while (Vector3.Distance(fightBarriers.position, targetHeight) > .25f)
         {
-            fightBarriers.position = Vector3.Lerp(fightBarriers.position, fightBarriers.position + (Vector3.up * 3), Time.deltaTime * raiseSpeed);
+            fightBarriers.position = Vector3.Lerp(fightBarriers.position, targetHeight, Time.deltaTime * raiseSpeed);
             yield return null;
         }
     }
 
+    void SpawnEnemies()
+    {
+        foreach (GameObject spawner in enemySpawners)
+            spawner.SetActive(true);
+    }
+
     IEnumerator LowerBarriers()
     {
-        print("lower barriers");
-        while (fightBarriers.position.y > -1)
+        if (!fightBarriers)
+            yield break;
+
+        Vector3 targetHeight = new Vector3(fightBarriers.transform.position.x, fightBarriers.transform.position.y - 3f, fightBarriers.transform.position.z);
+
+        _roomCleared = true;
+        while (Vector3.Distance(fightBarriers.position, targetHeight) > .25f)
         {
             fightBarriers.position = Vector3.Lerp(fightBarriers.position, fightBarriers.position + (Vector3.down * 3), Time.deltaTime * raiseSpeed);
             yield return null;
         }
+        
         Destroy(fightBarriers.gameObject);
         Destroy(gameObject);
     }
